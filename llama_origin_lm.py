@@ -9,14 +9,13 @@
 # ## summary
 
 # - decapoda-research/llama-7b-hf
-# - lora fine-tune bloom: 可插拔式的（plugin/adapter）
+# - lora fine-tune bloom: plugin/adapter
 #     - freeeze original weights
 #     - plugin lora adapters (peft)
-# - huggingface transformers 库
-#     - trainer.train 的参数及过程；
-#     - mlm 与 clm 的差异：（都是 unsupervised learning，都可以自动地构建 input/labels）
-#         - mlm：bert
-#         - clm：gpt（bloom）
+# - huggingface transformers
+#     - trainer.train
+#         - mlm: bert
+#         - clm: gpt (bloom)
 #     - pipeline
 #         - dataset/tasks
 #         - tokenizer
@@ -35,16 +34,17 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'  # Use GPU 0,1,2,3
 import torch
 import torch.nn as nn
 import bitsandbytes as bnb
-from transformers import LlamaTokenizer, LlamaConfig, LlamaForCausalLM, DataCollator, DataCollatorWithPadding
+import transformers
+from transformers import LlamaTokenizer, LlamaConfig, LlamaForSequenceClassification, DataCollator, \
+    DataCollatorWithPadding, Trainer, TrainingArguments, DataCollatorForLanguageModeling
 from peft import LoraConfig, get_peft_model
 from watermark import watermark
-import transformers
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model
-from transformers import Trainer, TrainingArguments, DataCollatorForLanguageModeling
+from config import *
 
 
-TORCH_SEED = 129
+configs = Config()
+TORCH_SEED = configs.seed
 torch.manual_seed(TORCH_SEED)
 torch.cuda.manual_seed_all(TORCH_SEED)
 torch.backends.cudnn.deterministic = True
@@ -61,7 +61,8 @@ model = LlamaForCausalLM.from_pretrained(
 )
 
 tokenizer = LlamaTokenizer.from_pretrained(cache_dir)
-tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+# tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+tokenizer.pad_token_id = 0
 
 # model.config
 LlamaConfig.from_pretrained(cache_dir)
@@ -130,52 +131,68 @@ print(model)
 
 
 
-# ## pipeline
+# ### pipeline
 
 data_files = {
     "train": "data/CHEF_train_modified.json",
     "test": "data/CHEF_test_modified.json"
 }
 
-# 加载数据集
+# load the dataset
 dataset = load_dataset('json', data_files=data_files)
 
 
-def merge_texts(example):
-    # 获取claim
-    combined_text = 'claim:' + example['claim']
-    # 获取evidence里的text并拼接
-    for sentence in example['ranksvm']:
-        combined_text += '\nevidence:' + sentence
-    # 更新input_text字段
-    example['prediction'] = combined_text + ' ->: ' + 'label:' + str(example['label'])
-    # 更新target_label字段
-
+def merge_texts_train(example):
+    combined_text = '请结合证据判断如下声明是正确的(标签为0),错误的(标签为1),还是无法判断其正误(标签为2):\n'
+    combined_text += '声明:' + example['claim']
+    for i in range(len(example['ranksvm'])):
+        if example['ranksvm'][i] != None:
+            combined_text += '\n证据{}:'.format(i+1) + example['ranksvm'][i]
+    
+    if example['label'] == 0:
+        example['prediction'] = combined_text + '结合证据判断,该声明是正确的,标签为' + str(example['label'])
+    elif example['label'] == 1:
+        example['prediction'] = combined_text + '结合证据判断,该声明是错误的,标签为' + str(example['label'])
+    elif example['label'] == 2:
+        example['prediction'] = combined_text + '结合证据判断,无法判断该声明的正误,标签为' + str(example['label'])
+    
     return example
 
 
-# 使用map方法更新数据集
-dataset['train'] = dataset['train'].map(merge_texts)
-dataset['test'] = dataset['test'].map(merge_texts)
+def merge_texts_test(example):
+    combined_text = '请结合证据判断如下声明是正确的(标签为0),错误的(标签为1),还是无法判断其正误(标签为2):\n'
+    combined_text += '声明:' + example['claim']
+    for i in range(len(example['ranksvm'])):
+        if example['ranksvm'][i] != None:
+            combined_text += '\n证据{}:'.format(i+1) + example['ranksvm'][i]
+    example['prediction'] = combined_text + '结合证据判断,'
+    
+    return example
+
+
+def reset_label(example):
+    example['labels'] = example['label']
+    return example
+
+
+# update the dataset using the map method
+dataset['train'] = dataset['train'].map(merge_texts_train)
+dataset['test'] = dataset['test'].map(merge_texts_test)
+dataset['train'] = dataset['train'].map(reset_label)
+dataset['test'] = dataset['test'].map(reset_label)
 
 
 
 # ### tokenize
 
-# 获取所有列的名称
-all_columns = dataset.column_names['train']
-# 移除'prediction'，留下其他列的名称
-columns_to_remove = [col for col in all_columns if col != 'prediction']
-# 使用remove_columns方法移除其他列
-dataset = dataset.remove_columns(columns_to_remove)
-
-
 def tokenize_function(example):
-    return tokenizer(example['prediction'], truncation=True, padding='max_length', max_length=2048)
+    return tokenizer(example['prediction'])
 
 
 dataset = dataset.map(tokenize_function, batched=True)
-dataset = dataset.remove_columns('prediction')
+all_columns = dataset.column_names['train']
+columns_to_remove = [col for col in all_columns if col != 'input_ids' and col != 'attention_mask']
+dataset = dataset.remove_columns(columns_to_remove)
 
 
 
@@ -184,17 +201,22 @@ dataset = dataset.remove_columns('prediction')
 trainer = Trainer(
     model=model,
     train_dataset=dataset['train'],
+    eval_dataset=dataset['test'],
     args=TrainingArguments(
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=4,
-        warmup_steps=100,
-        max_steps=200,
-        learning_rate=2e-4,
+        num_train_epochs=5,
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=2,
+        warmup_ratio=0.1,
+        weight_decay=0.01,
+        learning_rate=5e-5,
+        seed=TORCH_SEED,
         fp16=True,
-        logging_steps=1,
-        output_dir='outputs'
+        output_dir='outputs',
+        logging_steps=10,
+        evaluation_strategy="epoch",
     ),
-    data_collator=DataCollatorForLanguageModeling(tokenizer,mlm=False)
+    tokenizer=tokenizer,
+    data_collator=DataCollatorForLanguageModeling(tokenizer,mlm=False),
 )
 
 model.config.use_cache = False

@@ -1,22 +1,17 @@
 import torch
-DEVICE = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
-# DEVICE = torch.device('cpu')
-
-TORCH_SEED = 129
 
 
 class Config(object):
     def __init__(self):
-        self.bert_cache_path = 'bert-base-chinese'
-        # self.train_dataset_path = "Data/CHEF_train_lengthened.json"
-        # self.test_dataset_path = "Data/CHEF_test_lengthened.json"
-        self.train_dataset_path = "Data/CHEF_train.json"
-        self.test_dataset_path = "Data/CHEF_test.json"
-        # self.train_dataset_path = "Data/train.json"
-        # self.test_dataset_path = "Data/test.json"
+        self.train_dataset_path = "data/CHEF_train_modified.json"
+        self.test_dataset_path = "data/CHEF_test_modified.json"
+        # self.train_dataset_path = "data/CHEF_train_lengthened.json"
+        # self.test_dataset_path = "data/CHEF_test_lengthened.json"
+        # self.train_dataset_path = "data/CHEF_train.json"
+        # self.test_dataset_path = "data/CHEF_test.json"
         
-        # hyper parameter
-        self.num_classes = 3
+        self.seed = 129
+        self.num_labels = 3
         self.epochs = 30
         self.batch_size = 4
         self.lr = 1e-5
@@ -24,9 +19,9 @@ class Config(object):
         self.gradient_accumulation_steps = 2
         self.dp = 0.1
         self.warmup_proportion = 0.1
-
-        # gnn
-        self.feat_dim = 768
-        self.gnn_dims = '192'
-        self.att_heads = '4'
-
+        self.feat_dim = 4096
+        self.gnn_dims = '16,4,1'
+        self.att_heads = '16,8,4'
+        # self.name_list_q_gat = 'q_clause-level_gat,q_sentence-level_gat,q_text-level_gat'
+        self.name_list_v_gat = 'v_clause-level_gat,v_sentence-level_gat,v_text-level_gat'
+        

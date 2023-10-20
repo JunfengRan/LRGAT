@@ -2,7 +2,7 @@ import json
 
 
 def segment_sentences(text):
-    # 使用jieba进行分句
+    # use Jieba to segment sentences
     sentences = []
     temp_sentence = ""
     for char in text:
@@ -13,7 +13,7 @@ def segment_sentences(text):
         else:
             temp_sentence += char
 
-    # 去除空句子
+    # strip empty sentences
     sentences = [s.strip() for s in sentences if s.strip()]
 
     return sentences
@@ -29,25 +29,42 @@ def find_sentence_containing(subclause, text):
     return None
 
 
-# 测试
+def convert_claimId(obj):
+    """
+    recursively transform the claimId in obj from string to int
+    """
+    if isinstance(obj, list):
+        for item in obj:
+            convert_claimId(item)
+    elif isinstance(obj, dict):
+        if 'claimId' in obj and isinstance(obj['claimId'], str):
+            try:
+                obj['claimId'] = int(obj['claimId'])
+            except ValueError:
+                pass  # If claimId cannot be converted to int, ignore it
+        for key, value in obj.items():
+            convert_claimId(value)
+
+
+# test
 # text = "今天天气真好！我们一起去公园吧。"
 # sentences = segment_sentences(text)
 # for sentence in sentences:
 #     print(sentence)
 
-source_file_path = 'Data/CHEF_train.json'
-target_file_path = 'Data/CHEF_train_lengthened.json'
+source_file_path = 'data/CHEF_test.json'
+target_file_path = 'data/CHEF_test_lengthened.json'
 
 with open(source_file_path, 'r') as f:
     data = json.load(f)
-print(type(data))
+convert_claimId(data)
 renewed_data = []
 for item in data:
     # text = item['evidence']['0']['text']
     evidence = item['evidence']
     text = ''
     for k, v in evidence.items():
-        text += v['text']
+        text += v['text'] + '。'
     tfidf = item['tfidf']  # list
     cossim = item['cossim']
     ranksvm = item['ranksvm']
@@ -70,4 +87,5 @@ for item in data:
 
 with open(target_file_path, 'w') as file:
     json.dump(renewed_data, file, ensure_ascii=False, indent=4)
-    # f.write(renewed_data)
+    
+    

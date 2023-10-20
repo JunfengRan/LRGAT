@@ -2,18 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
-from config import DEVICE
 
 
 class GraphAttentionLayer(nn.Module):
-    """
-    reference: https://github.com/xptree/DeepInf
-    """
-    def __init__(self, att_head, in_dim, out_dim, dp_gnn, leaky_alpha=0.2):
+    def __init__(self, att_head, in_dim, out_dim, dp_gnn, name=None, leaky_alpha=0.2):
         super(GraphAttentionLayer, self).__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.dp_gnn = dp_gnn
+        if name is not None:
+            self.name = name
 
         self.att_head = att_head
         self.W = nn.Parameter(torch.Tensor(self.att_head, self.in_dim, self.out_dim))
@@ -24,7 +22,6 @@ class GraphAttentionLayer(nn.Module):
         self.leaky_alpha = leaky_alpha
         self.init_gnn_param()
 
-        assert self.in_dim == self.out_dim*self.att_head
         self.H = nn.Linear(self.in_dim, self.in_dim)
         init.xavier_normal_(self.H.weight)
 
@@ -46,7 +43,7 @@ class GraphAttentionLayer(nn.Module):
         attn = attn_src.expand(-1, -1, -1, N) + attn_dst.expand(-1, -1, -1, N).permute(0, 1, 3, 2)
         attn = F.leaky_relu(attn, self.leaky_alpha, inplace=True)
 
-        adj = torch.FloatTensor(adj).to(DEVICE)
+        adj = torch.FloatTensor(adj)
         mask = 1 - adj.unsqueeze(1)
         attn.data.masked_fill_(mask.bool(), -999)
 

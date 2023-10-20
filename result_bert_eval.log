@@ -1,52 +1,0 @@
-nohup: ignoring input
-'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /bert-base-chinese/resolve/main/config.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa4529255e0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: ba6fc7cf-70f3-46b3-b3d1-c24a78ca7046)')' thrown while requesting HEAD https://huggingface.co/bert-base-chinese/resolve/main/config.json
-'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /bert-base-chinese/resolve/main/adapter_config.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa4529259a0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: fa730688-9dd1-4cc8-a263-5c33df22f58b)')' thrown while requesting HEAD https://huggingface.co/bert-base-chinese/resolve/main/adapter_config.json
-'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /bert-base-chinese/resolve/main/adapter_config.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa4523de970>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: c90386d8-0e66-496c-b615-ebfefb3b3197)')' thrown while requesting HEAD https://huggingface.co/bert-base-chinese/resolve/main/adapter_config.json
-'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /bert-base-chinese/resolve/main/model.safetensors (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa4523e1fd0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: c28836f8-4ee1-4712-a127-cd59e15f30f0)')' thrown while requesting HEAD https://huggingface.co/bert-base-chinese/resolve/main/model.safetensors
-'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /bert-base-chinese/resolve/main/model.safetensors.index.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa4523e1310>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: ba923c4c-4113-44f5-a6d7-839b09dc5f35)')' thrown while requesting HEAD https://huggingface.co/bert-base-chinese/resolve/main/model.safetensors.index.json
-Some weights of BertForSequenceClassification were not initialized from the model checkpoint at bert-base-chinese and are newly initialized: ['classifier.bias', 'classifier.weight']
-You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
-'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /bert-base-chinese/resolve/main/tokenizer_config.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa452387df0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 9a908786-1e8f-47ca-8800-93c182b28882)')' thrown while requesting HEAD https://huggingface.co/bert-base-chinese/resolve/main/tokenizer_config.json
-'(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /bert-base-chinese/resolve/main/tokenizer.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa4523870a0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 5eb65cc7-d395-4701-aea1-3adc64b4855b)')' thrown while requesting HEAD https://huggingface.co/bert-base-chinese/resolve/main/tokenizer.json
-Loading the tokenizer from the `special_tokens_map.json` and the `added_tokens.json` will be removed in `transformers 5`,  it is kept for forward compatibility, but it is recommended to update your `tokenizer_config.json` by uploading it again. You will see the new `added_tokens_decoder` attribute that will store the relevant information.
-Found cached dataset json (/home/junfeng/.cache/huggingface/datasets/json/default-61329726683de3ff/0.0.0/0f7e3662623656454fcd2b650f34e886a7db4b9104504885bd462096cc7a9f51)
-  0%|          | 0/2 [00:00<?, ?it/s]100%|██████████| 2/2 [00:00<00:00, 282.34it/s]
-Map:   0%|          | 0/8002 [00:00<?, ? examples/s]Map:   8%|▊         | 675/8002 [00:00<00:01, 6624.85 examples/s]Map:  18%|█▊        | 1461/8002 [00:00<00:01, 3564.65 examples/s]Map:  25%|██▍       | 2000/8002 [00:00<00:02, 2956.72 examples/s]Map:  34%|███▍      | 2741/8002 [00:00<00:01, 2929.51 examples/s]Map:  42%|████▏     | 3363/8002 [00:01<00:01, 2864.69 examples/s]Map:  50%|████▉     | 4000/8002 [00:01<00:01, 2854.84 examples/s]Map:  59%|█████▉    | 4735/8002 [00:01<00:00, 3640.88 examples/s]Map:  67%|██████▋   | 5366/8002 [00:01<00:00, 3415.98 examples/s]Map:  75%|███████▍  | 6000/8002 [00:01<00:00, 3186.31 examples/s]Map:  84%|████████▍ | 6741/8002 [00:02<00:00, 3433.68 examples/s]Map:  93%|█████████▎| 7421/8002 [00:02<00:00, 3202.21 examples/s]Map: 100%|█████████▉| 8000/8002 [00:02<00:00, 3118.23 examples/s]                                                                 Map:   0%|          | 0/999 [00:00<?, ? examples/s]Map:  78%|███████▊  | 782/999 [00:00<00:00, 7654.18 examples/s]                                                               Map:   0%|          | 0/8002 [00:00<?, ? examples/s]Map:  12%|█▏        | 1000/8002 [00:00<00:02, 2423.42 examples/s]Map:  25%|██▍       | 2000/8002 [00:00<00:02, 2605.54 examples/s]Map:  37%|███▋      | 3000/8002 [00:01<00:01, 2674.11 examples/s]Map:  50%|████▉     | 4000/8002 [00:01<00:01, 2742.16 examples/s]Map:  62%|██████▏   | 5000/8002 [00:01<00:01, 2673.96 examples/s]Map:  75%|███████▍  | 6000/8002 [00:02<00:00, 2373.54 examples/s]Map:  87%|████████▋ | 7000/8002 [00:02<00:00, 2619.92 examples/s]Map: 100%|█████████▉| 8000/8002 [00:03<00:00, 2726.63 examples/s]                                                                 Map:   0%|          | 0/999 [00:00<?, ? examples/s]Map: 100%|██████████| 999/999 [00:00<00:00, 3003.96 examples/s]                                                                 0%|          | 0/200 [00:00<?, ?it/s]You're using a BertTokenizerFast tokenizer. Please note that with a fast tokenizer, using the `__call__` method is faster than using a method to encode the text followed by a call to the `pad` method to get a padded encoding.
-Traceback (most recent call last):
-  File "/home/junfeng/LRGAT-LLAMA/trainer_bert_eval.py", line 103, in <module>
-    trainer.train()
-  File "/home/junfeng/transformers/transformers/src/transformers/trainer.py", line 1591, in train
-    return inner_training_loop(
-  File "/home/junfeng/transformers/transformers/src/transformers/trainer.py", line 1892, in _inner_training_loop
-    tr_loss_step = self.training_step(model, inputs)
-  File "/home/junfeng/transformers/transformers/src/transformers/trainer.py", line 2776, in training_step
-    loss = self.compute_loss(model, inputs)
-  File "/home/junfeng/transformers/transformers/src/transformers/trainer.py", line 2801, in compute_loss
-    outputs = model(**inputs)
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
-    return forward_call(*input, **kwargs)
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/nn/parallel/data_parallel.py", line 171, in forward
-    outputs = self.parallel_apply(replicas, inputs, kwargs)
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/nn/parallel/data_parallel.py", line 181, in parallel_apply
-    return parallel_apply(replicas, inputs, kwargs, self.device_ids[:len(replicas)])
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/nn/parallel/parallel_apply.py", line 89, in parallel_apply
-    output.reraise()
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/_utils.py", line 543, in reraise
-    raise exception
-ValueError: Caught ValueError in replica 0 on device 0.
-Original Traceback (most recent call last):
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/nn/parallel/parallel_apply.py", line 64, in _worker
-    output = module(*input, **kwargs)
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
-    return forward_call(*input, **kwargs)
-  File "/home/junfeng/transformers/transformers/src/transformers/models/bert/modeling_bert.py", line 1599, in forward
-    loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
-    return forward_call(*input, **kwargs)
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/nn/modules/loss.py", line 1174, in forward
-    return F.cross_entropy(input, target, weight=self.weight,
-  File "/home/junfeng/miniconda3/envs/mytransformer/lib/python3.9/site-packages/torch/nn/functional.py", line 3026, in cross_entropy
-    return torch._C._nn.cross_entropy_loss(input, target, weight, _Reduction.get_enum(reduction), ignore_index, label_smoothing)
-ValueError: Expected input batch_size (4) to match target batch_size (2048).
-
-  0%|          | 0/200 [00:04<?, ?it/s]
