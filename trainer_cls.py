@@ -6,6 +6,7 @@
 # get_ipython().system('pip install -q git+https://github.com/huggingface/peft.git')
 
 
+
 # ## summary
 
 # - decapoda-research/llama-7b-hf
@@ -21,8 +22,6 @@
 #         - tokenizer
 #         - training (fine-tune base lora)
 #         - inference
-
-# ## base model & lora adapters
 
 
 
@@ -55,30 +54,30 @@ print(watermark(packages='peft,torch,loralib,transformers,accelerate,datasets'))
 cache_dir = "./LLAMA_local/decapoda-research/llama-7b-hf/"
 
 
+# config of llama
+llama_config = LlamaConfig.from_pretrained(cache_dir)
+llama_config.pad_token_id = 0
+
+# tokenizer of llama
+tokenizer = LlamaTokenizer.from_pretrained(cache_dir)
+# tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+tokenizer.pad_token_id = 0
+print(tokenizer)
+
+
 class CustomLlamaForClassification(LlamaForSequenceClassification):
-    def __init__(self, config, configs):
+    def __init__(self, config):
         super().__init__(config)
         self.num_labels = configs.num_labels
-        self.score = nn.Linear(config.hidden_size, configs.num_labels, bias=False)
+        self.score = nn.Linear(config.hidden_size, self.num_labels, bias=False)
 
 
 model = CustomLlamaForClassification.from_pretrained(
     cache_dir,
-    configs,
+    config=llama_config,
     load_in_8bit=True,
     device_map='auto',
 )
-
-model.num_labels = configs.num_labels
-
-tokenizer = LlamaTokenizer.from_pretrained(cache_dir)
-# tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-tokenizer.pad_token_id = 0
-
-# model.config
-LlamaConfig.from_pretrained(cache_dir)
-
-print(tokenizer)
 
 
 
@@ -117,7 +116,7 @@ def print_trainable_parameters(model):
     )
 
 
-config = LoraConfig(
+lora_config = LoraConfig(
     r=4,  # low rank
     lora_alpha=8,  # alpha scaling， scale lora weights/outputs
     # target_modules=["q_proj", "v_proj"], #if you know the 
@@ -156,7 +155,7 @@ class CustomGAT(nn.Module):
         return feat_in
 
 
-model = get_peft_model(model, config)
+model = get_peft_model(model, lora_config)
 
 model.base_model.model.model.layers[31].self_attn.v_proj.lora_A = nn.ModuleDict({
     "v_custom_gat": CustomGAT(configs, "v_custom_gat"),
@@ -184,6 +183,8 @@ def merge_texts(example):
     for i in range(len(example['ranksvm'])):
         if example['ranksvm'][i] != None:
             combined_text += '\n证据{}:'.format(i+1) + example['ranksvm'][i]
+    
+    example['prediction'] = combined_text
     
     # if example['label'] == 0:
     #     example['prediction'] = combined_text + '结合证据判断,该声明是正确的,标签为' + str(example['label'])
@@ -297,13 +298,13 @@ class CustomTrainer(Trainer):
             loss1 += self.nuclear_norm_loss(v_feat_nuclear[i])
         
         # value label loss
-        new_v_feat_label = new_v_feat_label[:, :, :self.model.config.num_labels]  # truncate
-        v_predictions = np.argmax(new_v_feat_label, axis=-1)
-        loss2 = self.value_label_loss(new_v_feat_label.view(-1, self.model.config.num_labels), labels.view(-1))
+        new_v_feat_label = v_feat_label[:, :, :self.model.num_labels]  # truncate
+        v_predictions = torch.argmax(new_v_feat_label, dim=-1)
+        loss2 = self.value_label_loss(new_v_feat_label.view(-1, self.model.num_labels), labels.view(-1))
         
         # label loss
-        predictions = np.argmax(logits, axis=-1)
-        loss3 = self.label_loss(logits.view(-1, self.model.config.num_labels), labels.view(-1))
+        predictions = torch.argmax(logits, dim=-1)
+        loss3 = self.label_loss(logits.view(-1, self.model.num_labels), labels.view(-1))
         
         # update category matrix
         for i in range(len(labels)):
@@ -317,11 +318,11 @@ class CustomTrainer(Trainer):
 def compute_metrics(eval_preds):
     step = self.state.global_step
     v_feat_label = feat_hook_label[step]
-    new_v_feat_label = new_v_feat_label[:, :, :self.model.config.num_labels]  # truncate
-    v_predictions = np.argmax(new_v_feat_label, axis=-1)
+    new_v_feat_label = new_v_feat_label[:, :, :self.model.num_labels]  # truncate
+    v_predictions = torch.argmax(new_v_feat_label, dim=-1)
     
     logits, labels = eval_preds
-    predictions = np.argmax(logits, axis=-1)
+    predictions = torch.argmax(logits, dim=-1)
     
     p_metric = evaluate.load("precision")
     r_metric = evaluate.load('recall')

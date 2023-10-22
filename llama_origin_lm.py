@@ -6,6 +6,7 @@
 # get_ipython().system('pip install -q git+https://github.com/huggingface/peft.git')
 
 
+
 # ## summary
 
 # - decapoda-research/llama-7b-hf
@@ -22,8 +23,6 @@
 #         - training (fine-tune base lora)
 #         - inference
 
-# ## base model & lora adapters
-
 
 
 import os
@@ -35,7 +34,7 @@ import torch
 import torch.nn as nn
 import bitsandbytes as bnb
 import transformers
-from transformers import LlamaTokenizer, LlamaConfig, LlamaForSequenceClassification, DataCollator, \
+from transformers import LlamaTokenizer, LlamaConfig, LlamaForCausalLM, DataCollator, \
     DataCollatorWithPadding, Trainer, TrainingArguments, DataCollatorForLanguageModeling
 from peft import LoraConfig, get_peft_model
 from watermark import watermark
@@ -54,20 +53,22 @@ print(watermark(packages='peft,torch,loralib,transformers,accelerate,datasets'))
 
 cache_dir = "./LLAMA_local/decapoda-research/llama-7b-hf/"
 
-model = LlamaForCausalLM.from_pretrained(
-    cache_dir,
-    load_in_8bit=True,
-    device_map='auto',
-)
+# config of llama
+llama_config = LlamaConfig.from_pretrained(cache_dir)
+llama_config.pad_token_id = 0
 
+# tokenizer of llama
 tokenizer = LlamaTokenizer.from_pretrained(cache_dir)
 # tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 tokenizer.pad_token_id = 0
-
-# model.config
-LlamaConfig.from_pretrained(cache_dir)
-
 print(tokenizer)
+
+model = LlamaForCausalLM.from_pretrained(
+    cache_dir,
+    config=llama_config,
+    load_in_8bit=True,
+    device_map='auto',
+)
 
 
 
@@ -77,11 +78,11 @@ print(tokenizer)
 
 for i, param in enumerate(model.parameters()):
     param.requires_grad = False  # freeze the model - train adapters later
-    #     print(i, 'param.requires_grad = False')
+    # print(i, 'param.requires_grad = False')
     if param.ndim == 1:
         # cast the small parameters (e.g. layernorm) to fp32 for stability
         param.data = param.data.to(torch.float32)
-#         print(i, 'ndim == 1, torch.float16 to torch.float32')
+        # print(i, 'ndim == 1, torch.float16 to torch.float32')
 
 # reduce number of stored activations
 model.gradient_checkpointing_enable()
@@ -114,7 +115,7 @@ def print_trainable_parameters(model):
     )
 
 
-config = LoraConfig(
+lora_config = LoraConfig(
     r=16,  # low rank
     lora_alpha=32,  # alpha scaling， scale lora weights/outputs
     # target_modules=["q_proj", "v_proj"], #if you know the 
@@ -124,7 +125,7 @@ config = LoraConfig(
 )
 
 
-model = get_peft_model(model, config)
+model = get_peft_model(model, lora_config)
 print_trainable_parameters(model)
 
 print(model)

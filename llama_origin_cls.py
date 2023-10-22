@@ -6,6 +6,7 @@
 # get_ipython().system('pip install -q git+https://github.com/huggingface/peft.git')
 
 
+
 # ## summary
 
 # - decapoda-research/llama-7b-hf
@@ -22,14 +23,11 @@
 #         - training (fine-tune base lora)
 #         - inference
 
-# ## base model & lora adapters
-
 
 
 import os
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'  # Use GPU 0,1,2,3
-
 
 import torch
 import torch.nn as nn
@@ -41,6 +39,7 @@ from peft import LoraConfig, get_peft_model
 from watermark import watermark
 from datasets import load_dataset
 from config import *
+from gnn_layer import GraphAttentionLayer
 
 
 configs = Config()
@@ -55,29 +54,30 @@ print(watermark(packages='peft,torch,loralib,transformers,accelerate,datasets'))
 cache_dir = "./LLAMA_local/decapoda-research/llama-7b-hf/"
 
 
+# config of llama
+llama_config = LlamaConfig.from_pretrained(cache_dir)
+llama_config.pad_token_id = 0
+
+# tokenizer of llama
+tokenizer = LlamaTokenizer.from_pretrained(cache_dir)
+# tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+tokenizer.pad_token_id = 0
+print(tokenizer)
+
+
 class CustomLlamaForClassification(LlamaForSequenceClassification):
-    def __init__(self, config, configs):
+    def __init__(self, config):
         super().__init__(config)
         self.num_labels = configs.num_labels
-        self.score = nn.Linear(config.hidden_size, configs.num_labels, bias=False)
+        self.score = nn.Linear(config.hidden_size, self.num_labels, bias=False)
 
 
 model = CustomLlamaForClassification.from_pretrained(
     cache_dir,
+    config=llama_config,
     load_in_8bit=True,
     device_map='auto',
 )
-
-model.num_labels = configs.num_labels
-
-tokenizer = LlamaTokenizer.from_pretrained(cache_dir)
-# tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-tokenizer.pad_token_id = 0
-
-# model.config
-LlamaConfig.from_pretrained(cache_dir)
-
-print(tokenizer)
 
 
 
@@ -116,7 +116,7 @@ def print_trainable_parameters(model):
     )
 
 
-config = LoraConfig(
+lora_config = LoraConfig(
     r=4,  # low rank
     lora_alpha=8,  # alpha scaling， scale lora weights/outputs
     # target_modules=["q_proj", "v_proj"], #if you know the 
@@ -126,7 +126,7 @@ config = LoraConfig(
 )
 
 
-model = get_peft_model(model, config)
+model = get_peft_model(model, lora_config)
 print_trainable_parameters(model)
 
 print(model)
@@ -150,6 +150,8 @@ def merge_texts(example):
     for i in range(len(example['ranksvm'])):
         if example['ranksvm'][i] != None:
             combined_text += '\n证据{}:'.format(i+1) + example['ranksvm'][i]
+    
+    example['prediction'] = combined_text
     
     # if example['label'] == 0:
     #     example['prediction'] = combined_text + '结合证据判断,该声明是正确的,标签为' + str(example['label'])
@@ -192,7 +194,7 @@ dataset = dataset.remove_columns(columns_to_remove)
 def compute_metrics(eval_preds):
     metrics = evaluate.load("f1")
     logits, labels = eval_preds
-    predictions = np.argmax(logits, axis=-1)
+    predictions = torch.argmax(logits, dim=-1)
     return metrics.compute(predictions=predictions, references=labels, average="micro")
 
 
