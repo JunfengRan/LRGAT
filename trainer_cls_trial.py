@@ -27,8 +27,10 @@
 
 import os
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'  # Use GPU 0,1,2,3
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 
+
+import numpy as np
 import torch
 import torch.nn as nn
 import bitsandbytes as bnb
@@ -40,6 +42,7 @@ from watermark import watermark
 from datasets import load_dataset
 from config import *
 from gnn_layer import GraphAttentionLayer
+import evaluate
 
 
 configs = Config()
@@ -130,9 +133,10 @@ lora_config = LoraConfig(
 # ### layer settings
 
 class CustomGAT(nn.Module):
-    def __init__(self, configs, name):
+    def __init__(self, configs, name=None):
         super(CustomGAT, self).__init__()
-        self.name = name
+        if name != None:
+            self.name = name
         in_dim = configs.feat_dim
         self.gnn_dims = [in_dim] + [int(dim) for dim in configs.gnn_dims.strip().split(',')]
 
@@ -150,27 +154,30 @@ class CustomGAT(nn.Module):
             })
 
     def forward(self, feat_in, adj=None):
-        for i, gnn_layer in enumerate(self.gnn_layer_stack):
+        for i, gnn_layer in enumerate(self.gnn_layer_stack.values()):
             feat_in = gnn_layer(feat_in, adj)
         return feat_in
 
 
 model = get_peft_model(model, lora_config)
 
-model.base_model.model.model.layers[31].self_attn.v_proj.lora_A = nn.ModuleDict({
-    "v_custom_gat": CustomGAT(configs, "v_custom_gat"),
-})
+model.base_model.model.model.layers[31].self_attn.v_proj.lora_A.default = CustomGAT(configs, name="v_custom_gat").cuda(3)
 
-print_trainable_parameters(model)
-print(model)
+# print_trainable_parameters(model)
+# print(model)
 
 
 
 # ### pipeline
 
+# data_files = {
+#     "train": "data/CHEF_train_modified.json",
+#     "test": "data/CHEF_test_modified.json"
+# }
+
 data_files = {
-    "train": "data/CHEF_train_modified.json",
-    "test": "data/CHEF_test_modified.json"
+    "train": "data/train.json",
+    "test": "data/test.json"
 }
 
 # load the dataset
@@ -184,7 +191,7 @@ def merge_texts(example):
         if example['ranksvm'][i] != None:
             combined_text += '\n证据{}:'.format(i+1) + example['ranksvm'][i]
     
-    example['prediction'] = combined_text
+    example['prediction'] = combined_text + '结合证据判断,该声明的标签为'
     
     # if example['label'] == 0:
     #     example['prediction'] = combined_text + '结合证据判断,该声明是正确的,标签为' + str(example['label'])
@@ -238,8 +245,8 @@ def hook_label(module, feat_in, feat_out):
     return None
 
 
-nuclear_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.v_custom_gat.gnn_layer_stack.v_sentence-level_gat"
-label_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.v_custom_gat.gnn_layer_stack.v_text-level_gat"
+nuclear_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.default.gnn_layer_stack.v_sentence-level_gat"
+label_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.default.gnn_layer_stack.v_text-level_gat"
 
 for (name, module) in model.named_modules():
     if name == nuclear_layer:
@@ -299,6 +306,7 @@ class CustomTrainer(Trainer):
         
         # value label loss
         new_v_feat_label = v_feat_label[:, :, :self.model.num_labels]  # truncate
+        new_v_feat_label = torch.sum(new_v_feat_label, dim=1) / new_v_feat_label.size(1)
         v_predictions = torch.argmax(new_v_feat_label, dim=-1)
         loss2 = self.value_label_loss(new_v_feat_label.view(-1, self.model.num_labels), labels.view(-1))
         
@@ -311,18 +319,25 @@ class CustomTrainer(Trainer):
             v_category_matrix[labels[i]][v_predictions[i]] += 1
             category_matrix[labels[i]][predictions[i]] += 1
         
-        loss = loss1 + loss2 + loss3
+        loss = loss1.cuda(0) + loss2.cuda(0) + loss3.cuda(0)
         return (loss, outputs) if return_outputs else loss
 
 
 def compute_metrics(eval_preds):
-    step = self.state.global_step
-    v_feat_label = feat_hook_label[step]
-    new_v_feat_label = new_v_feat_label[:, :, :self.model.num_labels]  # truncate
-    v_predictions = torch.argmax(new_v_feat_label, dim=-1)
-    
     logits, labels = eval_preds
-    predictions = torch.argmax(logits, dim=-1)
+    predictions = np.argmax(logits, axis=-1)
+    
+    # step = ???
+    # how to track the evaluate steps or how the evaluate steps are tracked
+    # impletation with wrong step index but a result
+    for step in range(int(len(labels) / 2)):
+        v_feat_label = feat_hook_label[step]
+        new_v_feat_label = v_feat_label[:, :, :configs.num_labels]  # truncate
+        new_v_feat_label = torch.sum(new_v_feat_label, dim=1) / new_v_feat_label.size(1)
+        if step == 0:
+            v_predictions = torch.argmax(new_v_feat_label, dim=-1)
+        else:
+            v_predictions = torch.cat((v_predictions, torch.argmax(new_v_feat_label, dim=-1)), dim=0)
     
     p_metric = evaluate.load("precision")
     r_metric = evaluate.load('recall')
@@ -352,8 +367,9 @@ trainer = CustomTrainer(
     train_dataset=dataset['train'],
     eval_dataset=dataset['test'],
     args=TrainingArguments(
-        num_train_epochs=5,
+        num_train_epochs=3,
         per_device_train_batch_size=2,
+        per_device_eval_batch_size=2,
         gradient_accumulation_steps=2,
         warmup_ratio=0.1,
         weight_decay=0.01,

@@ -22,7 +22,9 @@ class GraphAttentionLayer(nn.Module):
         self.leaky_alpha = leaky_alpha
         self.init_gnn_param()
 
-        self.H = nn.Linear(self.in_dim, self.in_dim)
+        self.G = nn.Linear(self.in_dim, self.out_dim * self.att_head)
+        self.H = nn.Linear(self.in_dim, self.out_dim * self.att_head)
+        init.xavier_normal_(self.G.weight)
         init.xavier_normal_(self.H.weight)
 
     def init_gnn_param(self):
@@ -43,9 +45,10 @@ class GraphAttentionLayer(nn.Module):
         attn = attn_src.expand(-1, -1, -1, N) + attn_dst.expand(-1, -1, -1, N).permute(0, 1, 3, 2)
         attn = F.leaky_relu(attn, self.leaky_alpha, inplace=True)
 
-        adj = torch.FloatTensor(adj)
-        mask = 1 - adj.unsqueeze(1)
-        attn.data.masked_fill_(mask.bool(), -999)
+        if adj != None:
+            adj = torch.FloatTensor(adj)
+            mask = 1 - adj.unsqueeze(1)
+            attn.data.masked_fill_(mask.bool(), -999)
 
         attn = F.softmax(attn, dim=-1)
         feat_out = torch.matmul(attn, h) + self.b
@@ -53,8 +56,8 @@ class GraphAttentionLayer(nn.Module):
         feat_out = feat_out.transpose(1, 2).contiguous().view(batch, N, -1)
         feat_out = F.elu(feat_out)
 
-        gate = torch.sigmoid(self.H(feat_in))
-        feat_out = gate * feat_out + (1 - gate) * feat_in
+        gate = torch.sigmoid(self.G(feat_in))
+        feat_out = gate * feat_out + (1 - gate) * self.H(feat_in)
 
         feat_out = F.dropout(feat_out, self.dp_gnn, training=self.training)
 

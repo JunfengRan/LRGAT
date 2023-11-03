@@ -30,6 +30,7 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'  # Use GPU 0,1,2,3
 
 
+import numpy as np
 import torch
 import torch.nn as nn
 import bitsandbytes as bnb
@@ -40,6 +41,7 @@ from peft import LoraConfig, get_peft_model
 from watermark import watermark
 from datasets import load_dataset
 from config import *
+import evaluate
 
 
 configs = Config()
@@ -53,6 +55,7 @@ print(watermark(packages='peft,torch,loralib,transformers,accelerate,datasets'))
 
 cache_dir = "./LLAMA_local/decapoda-research/llama-7b-hf/"
 
+
 # config of llama
 llama_config = LlamaConfig.from_pretrained(cache_dir)
 llama_config.pad_token_id = 0
@@ -62,6 +65,7 @@ tokenizer = LlamaTokenizer.from_pretrained(cache_dir)
 # tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 tokenizer.pad_token_id = 0
 print(tokenizer)
+
 
 model = LlamaForCausalLM.from_pretrained(
     cache_dir,
@@ -129,9 +133,10 @@ lora_config = LoraConfig(
 # ### layer settings
 
 class CustomGAT(nn.Module):
-    def __init__(self, configs, name):
+    def __init__(self, configs, name=None):
         super(CustomGAT, self).__init__()
-        self.name = name
+        if name != None:
+            self.name = name
         in_dim = configs.feat_dim
         self.gnn_dims = [in_dim] + [int(dim) for dim in configs.gnn_dims.strip().split(',')]
 
@@ -149,27 +154,30 @@ class CustomGAT(nn.Module):
             })
 
     def forward(self, feat_in, adj=None):
-        for i, gnn_layer in enumerate(self.gnn_layer_stack):
+        for i, gnn_layer in enumerate(self.gnn_layer_stack.values()):
             feat_in = gnn_layer(feat_in, adj)
         return feat_in
 
 
 model = get_peft_model(model, lora_config)
 
-model.base_model.model.model.layers[31].self_attn.v_proj.lora_A = nn.ModuleDict({
-    "v_custom_gat": CustomGAT(configs, "v_custom_gat"),
-})
+model.base_model.model.model.layers[31].self_attn.v_proj.lora_A.default = CustomGAT(configs, name="v_custom_gat").cuda(3)
 
-print_trainable_parameters(model)
-print(model)
+# print_trainable_parameters(model)
+# print(model)
 
 
 
 # ### pipeline
 
+# data_files = {
+#     "train": "data/CHEF_train_modified.json",
+#     "test": "data/CHEF_test_modified.json"
+# }
+
 data_files = {
-    "train": "data/CHEF_train_modified.json",
-    "test": "data/CHEF_test_modified.json"
+    "train": "data/train.json",
+    "test": "data/test.json"
 }
 
 # load the dataset
@@ -249,8 +257,8 @@ def hook_label(module, feat_in, feat_out):
     return None
 
 
-nuclear_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.v_custom_gat.gnn_layer_stack.v_sentence-level_gat"
-label_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.v_custom_gat.gnn_layer_stack.v_text-level_gat"
+nuclear_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.default.gnn_layer_stack.v_sentence-level_gat"
+label_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.default.gnn_layer_stack.v_text-level_gat"
 
 for (name, module) in model.named_modules():
     if name == nuclear_layer:
@@ -262,8 +270,6 @@ for (name, module) in model.named_modules():
 v_category_matrix = torch.zeros(3, 3, dtype=torch.int32)
 
 
-
-# ### training
 
 # ### training
 
@@ -300,53 +306,56 @@ class CustomTrainer(Trainer):
         logits = outputs.get("logits")
         labels = train_labels[inputs.get("indices")]
         
-        step = self.state.global_step
-        v_feat_nuclear = feat_hook_nuclear[step]
-        v_feat_label = feat_hook_label[step]
+        # step = self.state.global_step
+        # v_feat_nuclear = feat_hook_nuclear[step]
+        # v_feat_label = feat_hook_label[step]
         
-        # nuclear norm loss
-        loss1 = 0
-        for i in range(v_feat_nuclear.size(0)):
-            loss1 += self.nuclear_norm_loss(v_feat_nuclear[i])
+        # # nuclear norm loss
+        # loss1 = 0
+        # for i in range(v_feat_nuclear.size(0)):
+        #     loss1 += self.nuclear_norm_loss(v_feat_nuclear[i])
         
-        # value label loss
-        new_v_feat_label = new_v_feat_label[:, :, :self.model.config.num_labels]  # truncate
-        v_predictions = torch.argmax(new_v_feat_label, dim=-1)
-        loss2 = self.value_label_loss(new_v_feat_label.view(-1, self.model.config.num_labels), labels.view(-1))
+        # # value label loss
+        # new_v_feat_label = new_v_feat_label[:, :, :self.model.config.num_labels]  # truncate
+        # v_predictions = torch.argmax(new_v_feat_label, dim=-1)
+        # loss2 = self.value_label_loss(new_v_feat_label.view(-1, self.model.config.num_labels), labels.view(-1))
         
         # label loss
         predictions = torch.argmax(logits, dim=-1)
         loss3 = self.label_loss(logits.view(-1, self.model.config.num_labels), labels.view(-1))
         
-        # update category matrix
-        for i in range(len(labels)):
-            v_category_matrix[labels[i]][v_predictions[i]] += 1
+        # # update category matrix
+        # for i in range(len(labels)):
+        #     v_category_matrix[labels[i]][v_predictions[i]] += 1
         
-        loss = loss1 + loss2 + loss3
+        # loss = loss1 + loss2 + loss3
+        loss = loss3
         return (loss, outputs) if return_outputs else loss
 
 
-def compute_metrics(eval_preds):
-    step = self.state.global_step
-    v_feat_label = feat_hook_label[step]
-    new_v_feat_label = new_v_feat_label[:, :, :self.model.config.num_labels]  # truncate
-    v_predictions = torch.argmax(new_v_feat_label, dim=-1)
-    labels = test_labels[step % len(test_labels)]
+# def compute_metrics(eval_preds):
+#     # step = ???
+#     v_feat_label = feat_hook_label[step]
+#     new_v_feat_label = v_feat_label[:, :, :configs.num_labels]  # truncate
+#     new_v_feat_label = torch.sum(new_v_feat_label, dim=1) / new_v_feat_label.size(1)
+#     v_predictions = torch.argmax(new_v_feat_label, dim=-1)
+
+#     labels = test_labels[step % len(test_labels)]
     
-    p_metric = evaluate.load("precision")
-    r_metric = evaluate.load('recall')
-    f_metric = evaluate.load("f1")
+#     p_metric = evaluate.load("precision")
+#     r_metric = evaluate.load('recall')
+#     f_metric = evaluate.load("f1")
     
-    result = dict()
+#     result = dict()
     
-    result.update(p_metric.compute(predictions=v_predictions, references=labels, average="micro"))
-    result.update(r_metric.compute(predictions=v_predictions, references=labels, average="micro"))
-    result.update(f_metric.compute(predictions=v_predictions, references=labels, average="micro"))
-    result.update(p_metric.compute(predictions=v_predictions, references=labels, average="macro"))
-    result.update(r_metric.compute(predictions=v_predictions, references=labels, average="macro"))
-    result.update(f_metric.compute(predictions=v_predictions, references=labels, average="macro"))
+#     result.update(p_metric.compute(predictions=v_predictions, references=labels, average="micro"))
+#     result.update(r_metric.compute(predictions=v_predictions, references=labels, average="micro"))
+#     result.update(f_metric.compute(predictions=v_predictions, references=labels, average="micro"))
+#     result.update(p_metric.compute(predictions=v_predictions, references=labels, average="macro"))
+#     result.update(r_metric.compute(predictions=v_predictions, references=labels, average="macro"))
+#     result.update(f_metric.compute(predictions=v_predictions, references=labels, average="macro"))
     
-    return result
+#     return result
 
 
 trainer = CustomTrainer(
@@ -354,7 +363,7 @@ trainer = CustomTrainer(
     train_dataset=dataset['train'],
     eval_dataset=dataset['test'],
     args=TrainingArguments(
-        num_train_epochs=5,
+        num_train_epochs=3,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=2,
         warmup_ratio=0.1,
@@ -368,8 +377,9 @@ trainer = CustomTrainer(
     ),
     tokenizer=tokenizer,
     data_collator=DataCollatorForLanguageModeling(tokenizer,mlm=False),
+    compute_metrics=compute_metrics,
 )
 
 model.config.use_cache = False
 trainer.train()
-print("v_category_matrix:", v_category_matrix)
+# print("v_category_matrix:", v_category_matrix)

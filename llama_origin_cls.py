@@ -29,6 +29,7 @@ import os
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'  # Use GPU 0,1,2,3
 
+import numpy as np
 import torch
 import torch.nn as nn
 import bitsandbytes as bnb
@@ -40,6 +41,7 @@ from watermark import watermark
 from datasets import load_dataset
 from config import *
 from gnn_layer import GraphAttentionLayer
+import evaluate
 
 
 configs = Config()
@@ -151,7 +153,7 @@ def merge_texts(example):
         if example['ranksvm'][i] != None:
             combined_text += '\n证据{}:'.format(i+1) + example['ranksvm'][i]
     
-    example['prediction'] = combined_text
+    example['prediction'] = combined_text + '结合证据判断,该声明的标签为'
     
     # if example['label'] == 0:
     #     example['prediction'] = combined_text + '结合证据判断,该声明是正确的,标签为' + str(example['label'])
@@ -194,7 +196,7 @@ dataset = dataset.remove_columns(columns_to_remove)
 def compute_metrics(eval_preds):
     metrics = evaluate.load("f1")
     logits, labels = eval_preds
-    predictions = torch.argmax(logits, dim=-1)
+    predictions = np.argmax(logits, axis=-1)
     return metrics.compute(predictions=predictions, references=labels, average="micro")
 
 
@@ -203,8 +205,9 @@ trainer = Trainer(
     train_dataset=dataset['train'],
     eval_dataset=dataset['test'],
     args=TrainingArguments(
-        num_train_epochs=5,
+        num_train_epochs=3,
         per_device_train_batch_size=2,
+        per_device_eval_batch_size=2,
         gradient_accumulation_steps=2,
         warmup_ratio=0.1,
         weight_decay=0.01,

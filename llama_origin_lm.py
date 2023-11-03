@@ -30,6 +30,7 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'  # Use GPU 0,1,2,3
 
 
+import numpy as np
 import torch
 import torch.nn as nn
 import bitsandbytes as bnb
@@ -40,6 +41,7 @@ from peft import LoraConfig, get_peft_model
 from watermark import watermark
 from datasets import load_dataset
 from config import *
+import evaluate
 
 
 configs = Config()
@@ -204,8 +206,9 @@ trainer = Trainer(
     train_dataset=dataset['train'],
     eval_dataset=dataset['test'],
     args=TrainingArguments(
-        num_train_epochs=5,
+        num_train_epochs=3,
         per_device_train_batch_size=2,
+        per_device_eval_batch_size=2,
         gradient_accumulation_steps=2,
         warmup_ratio=0.1,
         weight_decay=0.01,
