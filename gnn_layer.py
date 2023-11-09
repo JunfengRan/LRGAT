@@ -2,6 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
+import numpy as np
+
+from accelerate import Accelerator
+
+from config import *
+
+
+configs = Config()
+accelerator = Accelerator()
+device = accelerator.device
 
 
 class GraphAttentionLayer(nn.Module):
@@ -33,7 +43,7 @@ class GraphAttentionLayer(nn.Module):
         init.xavier_uniform_(self.w_src.data)
         init.xavier_uniform_(self.w_dst.data)
 
-    def forward(self, feat_in, adj=None):
+    def forward(self, feat_in, layer=None, adj=None):
         batch, N, in_dim = feat_in.size()
         assert in_dim == self.in_dim
 
@@ -45,10 +55,27 @@ class GraphAttentionLayer(nn.Module):
         attn = attn_src.expand(-1, -1, -1, N) + attn_dst.expand(-1, -1, -1, N).permute(0, 1, 3, 2)
         attn = F.leaky_relu(attn, self.leaky_alpha, inplace=True)
 
-        if adj != None:
-            adj = torch.FloatTensor(adj)
-            mask = 1 - adj.unsqueeze(1)
-            attn.data.masked_fill_(mask.bool(), -999)
+        if adj == None:
+            adj = torch.ones((batch, N, N))
+            d = int(N * 4 ** (layer - 2))
+            
+            arrays = []
+            arrays.append(np.diag([1]*N,0))
+            for i in range(1,d+1):
+                array = np.diag([1]*(N-i),-i)
+                arrays.append(array)
+                array = np.diag([1]*(N-i),i)
+                arrays.append(array)
+            
+            mat = np.zeros((N,N))
+            for i in range(len(arrays)):
+                mat += arrays[i]
+            for i in range(len(adj)):
+                adj[i] = torch.FloatTensor(mat)
+        
+        adj = torch.FloatTensor(adj).to(device)
+        mask = 1 - adj.unsqueeze(1)
+        attn.data.masked_fill_(mask.bool(), -999)
 
         attn = F.softmax(attn, dim=-1)
         feat_out = torch.matmul(attn, h) + self.b
@@ -65,3 +92,31 @@ class GraphAttentionLayer(nn.Module):
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' + str(self.in_dim) + ' -> ' + str(self.out_dim*self.att_head) + ')'
+
+
+class CustomGAT(nn.Module):
+    def __init__(self, configs, name=None):
+        super(CustomGAT, self).__init__()
+        if name != None:
+            self.name = name
+        in_dim = configs.feat_dim
+        self.gnn_dims = [in_dim] + [int(dim) for dim in configs.gnn_dims.strip().split(',')]
+
+        self.gnn_layers = len(self.gnn_dims) - 1
+        self.att_heads = [int(att_head) for att_head in configs.att_heads.strip().split(',')]
+        
+        if name == "v_custom_gat":
+            self.name_list = configs.name_list_v_gat.strip().split(',')
+        
+        self.gnn_layer_stack = nn.ModuleDict()
+        for i in range(self.gnn_layers):
+            in_dim = self.gnn_dims[i] * self.att_heads[i - 1] if i != 0 else self.gnn_dims[i]
+            self.gnn_layer_stack.update({
+                "{}".format(self.name_list[i]): GraphAttentionLayer(self.att_heads[i], in_dim, \
+                    self.gnn_dims[i + 1], configs.dp, name=self.name_list[i])
+            })
+
+    def forward(self, feat_in, adj=None):
+        for i, gnn_layer in enumerate(self.gnn_layer_stack.values()):
+            feat_in = gnn_layer(feat_in, i, adj)
+        return feat_in
