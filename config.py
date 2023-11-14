@@ -4,15 +4,24 @@ class Config(object):
     def __init__(self):
         
         # model
-        self.llama_cache_path = "./LLAMA_local/decapoda-research/llama-7b-hf/"
+        self.llama_cache_path = "./decapoda-research/llama-7b-hf/"
+        self.llama2_cache_path = './meta-llama/Llama-2-7b-hf/'
         self.seed = 129
         
-        # dataset
+        # CHEF
         self.train_dataset_path = "data/CHEF_train_modified.json"
         self.test_dataset_path = "data/CHEF_test_modified.json"
-        # self.train_dataset_path = "data/train.json"
-        # self.test_dataset_path = "data/test.json"
         self.label = 'not_gold_label'
+        
+        # FEVER
+        # self.train_dataset_path = "data/FEVER_train.json"
+        # self.test_dataset_path = "data/FEVER_test.json"
+        
+        # Test
+        # self.train_dataset_path = "data/c_train.json"
+        # self.test_dataset_path = "data/c_test.json"
+        # self.train_dataset_path = "data/f_train.json"
+        # self.test_dataset_path = "data/f_test.json"
         
         # hyper parameters
         self.num_labels = 3
@@ -20,8 +29,8 @@ class Config(object):
         self.max_seq_len = 512
         self.pad_token_id = 0
         self.weight_decay = 0.01
-        self.lr = 2e-5
-        self.nuclear_loss_weight = 2e-5
+        self.lr = 5e-5
+        self.nuclear_loss_weight = 5e-6
         
         # lora parameters
         self.lora_r = 4
@@ -36,7 +45,7 @@ class Config(object):
         self.name_list_v_gat = 'v_clause-level_gat,v_sentence-level_gat,v_text-level_gat'
         
         # training parameters
-        self.epochs = 10
+        self.epochs = 30
         self.train_batch_size = 2
         self.eval_batch_size = 1
         self.gradient_accumulation_steps = 2

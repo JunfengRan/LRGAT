@@ -1,4 +1,3 @@
-from transformers import BertModel
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,7 +7,7 @@ from peft import LoraConfig, get_peft_model
 from accelerate import Accelerator
 
 from config import *
-from gnn_layer_acc import *
+from gnn_layer import *
 
 
 configs = Config()
@@ -92,10 +91,10 @@ class Network(nn.Module):
         print(self.model)
         
         # use hook to obtain labels
-        self.feat_hook_nuclear_train = []
-        self.feat_hook_nuclear_eval = []
-        self.feat_hook_label_train = []
-        self.feat_hook_label_eval = []
+        self.feat_hook_nuclear_train = torch.tensor([]).to(device)
+        self.feat_hook_nuclear_eval = torch.tensor([]).to(device)
+        self.feat_hook_label_train = torch.tensor([]).to(device)
+        self.feat_hook_label_eval = torch.tensor([]).to(device)
 
         nuclear_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.default.gnn_layer_stack.v_sentence-level_gat"
         label_layer = "base_model.model.model.layers.31.self_attn.v_proj.lora_A.default.gnn_layer_stack.v_text-level_gat"
@@ -125,12 +124,20 @@ class Network(nn.Module):
         if self.training:
             if self.evaluation_step != 0:
                 self.evaluation_step = 0
+                if self.feat_hook_nuclear_eval.size(0) != 0:
+                    self.feat_hook_nuclear_eval = torch.tensor([]).to(device)
+                if self.feat_hook_label_eval.size(0) != 0:
+                    self.feat_hook_label_eval = torch.tensor([]).to(device)
             v_feat_nuclear = self.feat_hook_nuclear_train[self.training_step]
             v_feat_label = self.feat_hook_label_train[self.training_step]
         
         else:
             if self.training_step != 0:
                 self.training_step = 0
+                if self.feat_hook_nuclear_train.size(0) != 0:
+                    self.feat_hook_nuclear_train = torch.tensor([]).to(device)
+                if self.feat_hook_label_train.size(0) != 0:
+                    self.feat_hook_label_train = torch.tensor([]).to(device)
             v_feat_nuclear = self.feat_hook_nuclear_eval[self.evaluation_step]
             v_feat_label = self.feat_hook_label_eval[self.evaluation_step]
             
@@ -156,6 +163,9 @@ class Network(nn.Module):
         # label loss
         loss3 = self.label_loss(logits.view(-1, self.model.num_labels), labels.view(-1))
         
+        # loss = loss3
+        # loss = loss1 + loss3
+        # loss = loss2 + loss3
         loss = loss1 + loss2 + loss3
         
         return loss
@@ -163,18 +173,30 @@ class Network(nn.Module):
     
     def hook_nuclear(self, module, feat_in, feat_out):
         if module.training:
-            self.feat_hook_nuclear_train.append(feat_out.data)
+            if self.feat_hook_nuclear_train.size(0) == 0:
+                self.feat_hook_nuclear_train = feat_out.unsqueeze(0)
+            else:
+                self.feat_hook_nuclear_train = torch.cat((self.feat_hook_nuclear_train, feat_out.unsqueeze(0)), dim=0)
         else:
-            self.feat_hook_nuclear_eval.append(feat_out.data)
+            if self.feat_hook_nuclear_eval.size(0) == 0:
+                self.feat_hook_nuclear_eval = feat_out.unsqueeze(0)
+            else:
+                self.feat_hook_nuclear_eval = torch.cat((self.feat_hook_nuclear_eval, feat_out.unsqueeze(0)), dim=0)
         
         return None
 
 
     def hook_label(self, module, feat_in, feat_out):
         if module.training:
-            self.feat_hook_label_train.append(feat_out.data)
+            if self.feat_hook_label_train.size(0) == 0:
+                self.feat_hook_label_train = feat_out.unsqueeze(0)
+            else:
+                self.feat_hook_label_train = torch.cat((self.feat_hook_label_train, feat_out.unsqueeze(0)), dim=0)
         else:
-            self.feat_hook_label_eval.append(feat_out.data)
+            if self.feat_hook_label_eval.size(0) == 0:
+                self.feat_hook_label_eval = feat_out.unsqueeze(0)
+            else:
+                self.feat_hook_label_eval = torch.cat((self.feat_hook_label_eval, feat_out.unsqueeze(0)), dim=0)
         
         return None
     

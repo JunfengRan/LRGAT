@@ -8,13 +8,16 @@ FEVER data available at: https://disk.pku.edu.cn:443/link/FC85BC31162E109FEBAA09
 ## Code
 
 ### Notation 
-"Origin" for the latest stable code. "Trial" for the latest development code with readable results. "LM" for language modeling. "CLS" for sequence classification.
+"no_suffix" for original LLAMA. "_lr" for LRGAT-LLAMA.
 
+### Requirement
+peft        : 0.5.0
+torch       : 1.13.1
+loralib     : 0.1.2
+transformers: 4.34.0.dev0
+accelerate  : 0.23.0
+datasets    : 2.10.1
 
-## TODO
-
-(11.03.1) Device selection is insane in Trainer framework. You have to use exactly four GPUs to run these codes. Fix the modules that use ".cuda()" approach to select devices manually.
-
-(11.03.2) Layer-specific <adj> tensor construction in graph attention networks.
-
-(11.03.3) Using a training dataset (len=10) and a test dataset (len=10), batch size equals 2, and gradient accumulation step equals 2, the hook method has hooked 15 outputs and the total labels predicted are 54 (maybe $2 * 2 * 2 * 3$ in training and $3*10$ in evaluate). Find out the tracking mechanism of the hook, how to track the evaluate steps or how the evaluate steps are tracked, and the implementation.
+### Model
+Llama       : decapoda-research/llama-7b-hf
+Llama2      : meta-llama/Llama-2-7b-hf
