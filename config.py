@@ -1,3 +1,4 @@
+import torch
 
 
 class Config(object):
@@ -7,21 +8,33 @@ class Config(object):
         self.llama_cache_path = "./decapoda-research/llama-7b-hf/"
         self.llama2_cache_path = './meta-llama/Llama-2-7b-hf/'
         self.seed = 129
+        self.dataset = 'CHEF'
+        # self.dataset = 'FEVER'
+        self.debugging = False
         
         # CHEF
-        self.train_dataset_path = "data/CHEF_train_modified.json"
-        self.test_dataset_path = "data/CHEF_test_modified.json"
-        self.label = 'not_gold_label'
+        if self.dataset == 'CHEF':
+            self.label = 'not_gold_label'  # 'gold_label'
+            self.train_dataset_path = "data/CHEF_train_modified.json"
+            self.test_dataset_path = "data/CHEF_test_modified.json"
+            # self.train_dataset_path = "data/CHEF_train_correct.json"
+            # self.test_dataset_path = "data/CHEF_test_correct.json"
         
         # FEVER
-        # self.train_dataset_path = "data/FEVER_train.json"
-        # self.test_dataset_path = "data/FEVER_test.json"
+        if self.dataset == 'FEVER':
+            self.train_dataset_path = "data/FEVER_train.json"
+            self.test_dataset_path = "data/FEVER_test.json"
         
         # Test
-        # self.train_dataset_path = "data/c_train.json"
-        # self.test_dataset_path = "data/c_test.json"
-        # self.train_dataset_path = "data/f_train.json"
-        # self.test_dataset_path = "data/f_test.json"
+        if self.debugging:
+            if self.dataset == 'CHEF':
+                self.train_dataset_path = "data/c_train.json"
+                self.test_dataset_path = "data/c_test.json"
+            elif self.dataset == 'FEVER':
+                self.train_dataset_path = "data/f_train.json"
+                self.test_dataset_path = "data/f_test.json"
+            else:
+                raise ValueError('dataset must be CHEF or FEVER')
         
         # hyper parameters
         self.num_labels = 3
@@ -29,8 +42,10 @@ class Config(object):
         self.max_seq_len = 512
         self.pad_token_id = 0
         self.weight_decay = 0.01
-        self.lr = 5e-5
-        self.nuclear_loss_weight = 5e-6
+        self.lr = 2e-5
+        self.nuclear_loss_weight = 2e-5
+        self.v_label_loss_weight = torch.tensor([1.0, 1.0, 1.0])
+        self.label_loss_weight = torch.tensor([1.0, 1.0, 1.0])
         
         # lora parameters
         self.lora_r = 4
@@ -48,5 +63,5 @@ class Config(object):
         self.epochs = 30
         self.train_batch_size = 2
         self.eval_batch_size = 1
-        self.gradient_accumulation_steps = 2
-        self.warmup_proportion = 0.1
+        self.gradient_accumulation_steps = 4
+        self.warmup_proportion = 0.05

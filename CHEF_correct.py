@@ -1,5 +1,10 @@
 import json
 
+
+source_file_path = 'data/raw/CHEF_train.json'
+target_file_path = 'data/CHEF_train_correct.json'
+
+
 def convert_claimId(obj):
     """
     recursively transform the claimId in obj from string to int
@@ -16,10 +21,11 @@ def convert_claimId(obj):
         for key, value in obj.items():
             convert_claimId(value)
 
-with open('data/CHEF_test.json', 'r', encoding='utf-8') as f:
+
+with open(source_file_path, 'r', encoding='utf-8') as f:
     data = json.load(f)
 
 convert_claimId(data)
 
 with open(target_file_path, 'w') as file:
-    json.dump(renewed_data, file, ensure_ascii=False, indent=4)
+    json.dump(data, file, ensure_ascii=False, indent=4)

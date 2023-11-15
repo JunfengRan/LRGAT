@@ -1,12 +1,13 @@
 import os
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '3'
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import transformers
+import pandas as pd
 
 from watermark import watermark
 from torch.utils.data import Dataset, DataLoader
@@ -89,12 +90,8 @@ def main(train_loader, test_loader):
     model = Network(configs).to(device)
     
     # optimizer
-    params = list(model.named_parameters())
-    optimizer_grouped_params = [
-        {'params': [p for n, p in params if 'lora_' not in n]},
-        {'params': [p for n, p in params if 'lora_' in n], 'lr': configs.lr, 'weight_decay': configs.weight_decay}
-    ]
-    optimizer = AdamW(params=optimizer_grouped_params, lr=configs.lr, weight_decay=configs.weight_decay)
+    params_with_grad = [param for param in model.parameters() if param.requires_grad]
+    optimizer = AdamW(params=params_with_grad, lr=configs.lr, weight_decay=configs.weight_decay)
 
     # scheduler
     training_steps = configs.epochs * len(train_loader) // configs.gradient_accumulation_steps
@@ -166,10 +163,11 @@ if __name__ == '__main__':
 
     # tokenizer
     access_token = "hf_token"
-    tokenizer = LlamaTokenizer.from_pretrained(configs.llama_cache_path, use_fast=True, use_auth_token=access_token)
+    tokenizer = LlamaTokenizer.from_pretrained(configs.llama2_cache_path, use_fast=True, use_auth_token=access_token)
     tokenizer.padding_side = "left"
     tokenizer.pad_token_id = tokenizer.unk_token_id
     print(tokenizer)
+    
     
     data_files = {
         "train": configs.train_dataset_path,
@@ -180,13 +178,16 @@ if __name__ == '__main__':
     dataset = load_dataset('json', data_files=data_files)
 
 
-    def merge_texts(example):
-        combined_text = '请结合证据判断下述声明是正确的(标签为0),下述声明是错误的(标签为1),或是证据提供的信息不足以进行判断(标签为2):\n'
+    def chef_merge_texts(example):
+        combined_text = '请结合证据判断:下述声明是被证据支持的(标签为0),下述声明是被证据驳斥的(标签为1),或是证据提供的信息不足以进行判断(标签为2):\n'
         combined_text += '声明:' + example['claim']
+        evidence_flag = 0
         
         if configs.label != 'gold_label':
             for i in range(len(example['ranksvm'])):
-                if example['ranksvm'][i] != None and example['ranksvm'][i] != '':
+                if example['ranksvm'][i] != None and example['ranksvm'][i] != '' and example['ranksvm'][i] != ' ':
+                    
+                    evidence_flag = 1
                     
                     # set length threshold
                     length_threshold = int(configs.max_seq_len / len(example['ranksvm']))
@@ -196,22 +197,57 @@ if __name__ == '__main__':
                     
         else:
             for i in range(len(example['gold evidence'])):
-                if example['gold evidence'][i] != None and example['gold evidence'][i] != '':
+                if example['gold evidence'][i] != None and example['gold evidence'][i] != '' and example['gold evidence'][i] != ' ':
+                    
+                    evidence_flag = 1
                     
                     # set length threshold
                     length_threshold = int(configs.max_seq_len / len(example['gold evidence']))
                     if len(example['gold evidence'][i]) > length_threshold:
                         example['gold evidence'][i] = example['gold evidence'][i][:length_threshold]
                     combined_text += '\n证据{}:'.format(i+1) + example['gold evidence'][i]
+                    
+        if evidence_flag == 0:
+            combined_text += '\n证据: 未提供证据.'
         
-        example['prediction'] = combined_text + '结合证据判断,该声明的标签为'
+        example['prediction'] = combined_text + '结合证据判断,标签为'
         
         # if example['label'] == 0:
-        #     example['prediction'] = combined_text + '结合证据判断,该声明是正确的,标签为' + str(example['label'])
+        #     example['prediction'] = combined_text + '结合证据判断,该声明是被证据支持的,标签为' + str(example['label'])
         # elif example['label'] == 1:
-        #     example['prediction'] = combined_text + '结合证据判断,该声明是错误的,标签为' + str(example['label'])
+        #     example['prediction'] = combined_text + '结合证据判断,该声明是被证据驳斥的,标签为' + str(example['label'])
         # elif example['label'] == 2:
         #     example['prediction'] = combined_text + '结合证据判断,证据提供的信息不足以进行判断,标签为' + str(example['label'])
+        
+        return example
+    
+    
+    def fever_merge_texts(example):
+        combined_text = 'Please use the evidence to determine whether the following claim is supported by it (label 0),\
+            refuted by it (label 1), or the evidence does not provide sufficient information to make a judgment (label 2):\n'
+        combined_text += 'Claim: ' + example['claim']
+        annotation_id = None
+        evidence_flag = 0
+        
+        for i in range(len(example['evidence'])):
+            if example['evidence']['{}'.format(i)] != None and example['evidence']['{}'.format(i)] != '' and example['evidence']['{}'.format(i)] != ' ':       
+                evidence_flag = 1
+                combined_text += '\nEvidence{}: '.format(i+1) + example['evidence']['{}'.format(i)]
+        
+        if evidence_flag == 0:
+            combined_text += '\nEvidence: No evidence is provided.'
+        
+        example['prediction'] = combined_text + 'Judging from the evidence, the label is'
+        
+        # if example['label'] == 0:
+        #     example['prediction'] = combined_text + 'Judging from the evidence, the claim is supported by the evidence, \
+        #         so the label is' + str(example['label'])
+        # elif example['label'] == 1:
+        #     example['prediction'] = combined_text + 'Judging from the evidence, the claim is refuted by the evidence, \
+        #         so the label is' + str(example['label'])
+        # elif example['label'] == 2:
+        #     example['prediction'] = combined_text + 'Judging from the evidence, the evidence does not provide sufficient information \
+        #         to make a judgment, so the label is' + str(example['label'])
         
         return example
 
@@ -222,8 +258,13 @@ if __name__ == '__main__':
         return example
 
     # update the dataset using the map method
-    dataset['train'] = dataset['train'].map(merge_texts)
-    dataset['test'] = dataset['test'].map(merge_texts)
+    if configs.dataset == 'CHEF':
+        dataset['train'] = dataset['train'].map(chef_merge_texts)
+        dataset['test'] = dataset['test'].map(chef_merge_texts)
+    elif configs.dataset == 'FEVER':
+        dataset['train'] = dataset['train'].map(fever_merge_texts)
+        dataset['test'] = dataset['test'].map(fever_merge_texts)
+    
     dataset['train'] = dataset['train'].map(reset_label)
     dataset['test'] = dataset['test'].map(reset_label)
 

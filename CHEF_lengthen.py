@@ -1,6 +1,10 @@
 import json
 
 
+source_file_path = 'data/raw/CHEF_train.json'
+target_file_path = 'data/CHEF_train_lengthened.json'
+
+
 def segment_sentences(text):
     # use Jieba to segment sentences
     sentences = []
@@ -52,13 +56,12 @@ def convert_claimId(obj):
 # for sentence in sentences:
 #     print(sentence)
 
-source_file_path = 'data/CHEF_test.json'
-target_file_path = 'data/CHEF_test_lengthened.json'
 
 with open(source_file_path, 'r') as f:
     data = json.load(f)
 convert_claimId(data)
 renewed_data = []
+
 for item in data:
     # text = item['evidence']['0']['text']
     evidence = item['evidence']
@@ -87,5 +90,3 @@ for item in data:
 
 with open(target_file_path, 'w') as file:
     json.dump(renewed_data, file, ensure_ascii=False, indent=4)
-    
-    

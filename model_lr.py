@@ -52,7 +52,7 @@ class Network(nn.Module):
         self.num_labels = configs.num_labels
         
         self.model = CustomLlamaForClassification.from_pretrained(
-            configs.llama_cache_path,
+            configs.llama2_cache_path,
             load_in_8bit=True,
             device_map='auto',
         )
@@ -106,8 +106,8 @@ class Network(nn.Module):
                 module.register_forward_hook(hook=self.hook_label)
         
         self.nuclear_norm_loss = NuclearNormLoss(weight=configs.nuclear_loss_weight)
-        self.value_label_loss = nn.CrossEntropyLoss()
-        self.label_loss = nn.CrossEntropyLoss()
+        self.value_label_loss = nn.CrossEntropyLoss(weight=configs.v_label_loss_weight.to(device))
+        self.label_loss = nn.CrossEntropyLoss(weight=configs.label_loss_weight.to(device))
         
         self.training_step = 0
         self.evaluation_step = 0
@@ -163,10 +163,10 @@ class Network(nn.Module):
         # label loss
         loss3 = self.label_loss(logits.view(-1, self.model.num_labels), labels.view(-1))
         
-        # loss = loss3
+        loss = loss3
         # loss = loss1 + loss3
         # loss = loss2 + loss3
-        loss = loss1 + loss2 + loss3
+        # loss = loss1 + loss2 + loss3
         
         return loss
     

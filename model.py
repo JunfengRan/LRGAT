@@ -32,7 +32,7 @@ class Network(nn.Module):
         self.num_labels = configs.num_labels
         
         self.model = CustomLlamaForClassification.from_pretrained(
-            configs.llama_cache_path,
+            configs.llama2_cache_path,
             load_in_8bit=True,
             device_map='auto',
         )
@@ -69,7 +69,7 @@ class Network(nn.Module):
         self.print_trainable_parameters(self.model)
         print(self.model)
 
-        self.label_loss = nn.CrossEntropyLoss()
+        self.label_loss = nn.CrossEntropyLoss(weight=configs.label_loss_weight.to(device))
 
     
     def forward(self, labels, input_ids, attention_mask):
