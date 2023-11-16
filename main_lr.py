@@ -1,6 +1,6 @@
 import os
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 
 import numpy as np
 import torch
@@ -194,8 +194,18 @@ if __name__ == '__main__':
 
     # tokenizer
     access_token = "hf_token"
-    tokenizer = LlamaTokenizer.from_pretrained(configs.llama2_cache_path, use_fast=True, use_auth_token=access_token)
-    tokenizer.padding_side = "left"
+    if configs.llama_version == 1:
+        tokenizer = LlamaTokenizer.from_pretrained(configs.llama1_cache_path, use_fast=True, use_auth_token=access_token)
+    elif configs.llama_version == 2:
+        tokenizer = LlamaTokenizer.from_pretrained(configs.llama2_cache_path, use_fast=True, use_auth_token=access_token)
+    else:
+        raise ValueError('llama_version must be 1 or 2')
+    if configs.padding_side == "left":
+        tokenizer.padding_side = "left"
+    elif configs.padding_side == "right":
+        tokenizer.padding_side = "right"
+    else:
+        raise ValueError('padding_side must be left or right')
     tokenizer.pad_token_id = tokenizer.unk_token_id
     print(tokenizer)
     

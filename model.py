@@ -31,8 +31,15 @@ class Network(nn.Module):
         super(Network, self).__init__()
         self.num_labels = configs.num_labels
         
+        if configs.llama_version == 1:
+            llama_cache_path = configs.llama1_cache_path
+        elif configs.llama_version == 2:
+            llama_cache_path = configs.llama2_cache_path
+        else:
+            raise ValueError('llama_version must be 1 or 2')
+        
         self.model = CustomLlamaForClassification.from_pretrained(
-            configs.llama2_cache_path,
+            llama_cache_path,
             load_in_8bit=True,
             device_map='auto',
         )
