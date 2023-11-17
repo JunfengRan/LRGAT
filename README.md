@@ -37,5 +37,11 @@ Llama2      : meta-llama/Llama-2-7b-hf
 
 
 
-## Issues
-Searching for the best learning rate.
+## TODO
+Multi-device data parallel. 
+
+
+
+## Attention
+Do not try eval batch size > 1.
+Do not use left padding for llama-2.
