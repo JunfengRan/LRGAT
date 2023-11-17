@@ -1,6 +1,9 @@
 import os
 import json
+import random
 
+
+evidence_bucket = []
 
 def convert_jsonl_to_json(file_path, new_file_path):
     with open(file_path, 'r') as f:
@@ -27,7 +30,7 @@ def convert_jsonl_to_json(file_path, new_file_path):
         for i in range(len(item['evidence'])):
             if index == 5:
                 break
-            if item['evidence'][i] != None and item['evidence'][i] != '':
+            if item['evidence'][i] != None and item['evidence'][i] != '' and item['evidence'][i] != ' ':
                 new_evidence = item['evidence'][i][0]
                 if new_evidence[1] != None:
                     if annotation_id == None:
@@ -35,7 +38,12 @@ def convert_jsonl_to_json(file_path, new_file_path):
                     if new_evidence[1] == annotation_id:
                         if len(new_evidence) >= 5:
                             evidence_dict[index] += new_evidence[4]
-                    index += 1
+                            evidence_bucket.append(new_evidence[4])
+                            index += 1
+                else:
+                    if random.random() > 0.95:
+                        evidence_dict[index] += evidence_bucket[random.randint(0, len(evidence_bucket) - 1)]
+                        index += 1
         item['evidence'] = evidence_dict
     
     with open(new_file_path[:-1], 'w') as f:

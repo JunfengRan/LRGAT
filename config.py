@@ -41,7 +41,7 @@ class Config(object):
         self.feat_dim = 4096
         self.max_seq_len = 512
         self.pad_token_id = 0
-        self.padding_side = 'right'  # 'left' or 'right'
+        self.padding_side = 'left'  # 'left' or 'right'
         self.weight_decay = 0.01
         self.lr = 2e-4
         self.nuclear_loss_weight = 2e-5
@@ -63,8 +63,9 @@ class Config(object):
         self.name_list_v_gat = 'v_clause-level_gat,v_sentence-level_gat,v_text-level_gat'
         
         # training parameters
-        self.epochs = 20
+        self.epochs = 5
         self.train_batch_size = 2
         self.eval_batch_size = 1
         self.gradient_accumulation_steps = 4
         self.warmup_proportion = 0.05
+        self.output_dir = 'outputs/cls_lr_left'

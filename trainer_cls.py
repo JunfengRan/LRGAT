@@ -1,6 +1,6 @@
 import os
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '6'
+os.environ['CUDA_VISIBLE_DEVICES'] = '5'
 
 import numpy as np
 import torch
@@ -242,7 +242,6 @@ def compute_metrics(eval_preds):
     logits, labels = eval_preds
     predictions = np.argmax(logits, axis=-1)
     
-    
     # torcheval
     if 0 not in predictions:
         predictions = np.append(predictions, [0])
@@ -264,7 +263,7 @@ def compute_metrics(eval_preds):
     
     p_macro_result = FUNC.multiclass_precision(predictions, labels, average="macro", num_classes=configs.num_labels)
     r_macro_result = FUNC.multiclass_recall(predictions, labels, average="macro", num_classes=configs.num_labels)
-    f_micro_result = FUNC.multiclass_f1_score(predictions, labels, average="macro", num_classes=configs.num_labels)
+    f_macro_result = FUNC.multiclass_f1_score(predictions, labels, average="macro", num_classes=configs.num_labels)
     
     
     # # evaluate
@@ -287,13 +286,15 @@ def compute_metrics(eval_preds):
     for i in range(len(predictions)):
         category_matrix[labels[i]][predictions[i]] += 1
     
+    category_matrix = category_matrix.tolist()
+    
     result = dict()
     result['micro_precision'] = p_micro_result
     result['micro_recall'] = r_micro_result
     result['micro_f1'] = f_micro_result
     result['macro_precision'] = p_macro_result
     result['macro_recall'] = r_macro_result
-    result['macro_f1'] = f_micro_result
+    result['macro_f1'] = f_macro_result
     result['category_matrix'] = category_matrix
     
     return result
@@ -314,7 +315,7 @@ trainer = CustomTrainer(
         seed=TORCH_SEED,
         data_seed=TORCH_SEED,
         fp16=True,
-        output_dir='outputs/trainer_cls',
+        output_dir=configs.output_dir,
         evaluation_strategy="epoch",
     ),
     tokenizer=tokenizer,
