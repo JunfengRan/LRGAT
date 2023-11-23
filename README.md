@@ -1,7 +1,3 @@
-# LRGNet - Low Rank Graph Network with Intrinsic Fact Dimension on Evidence Fact-Checking
-
-
-
 ## Data
 All data available at: https://disk.pku.edu.cn:443/link/F593EBC724B9448AD47AA2BD790BB62D
 
@@ -44,4 +40,5 @@ Multi-device data parallel.
 
 ## Attention
 Do not try eval batch size > 1.
+
 Do not use left padding for llama-2.
